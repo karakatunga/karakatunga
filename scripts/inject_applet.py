@@ -25,6 +25,6 @@ if registration not in text:
     anchor = '    // Enable reusable InkHUD touch status indicator'
     if anchor not in text:
         raise SystemExit("Could not find applet registration anchor; upstream changed")
-    text = text.replace(anchor, registration + "\\n\\n" + anchor, 1)
+    text = text.replace(anchor, registration + "\n\n" + anchor, 1)
 variant.write_text(text)
 print("HybridReader applet injected into T5 S3 Pro InkHUD variant")

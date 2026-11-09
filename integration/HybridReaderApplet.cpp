@@ -125,7 +125,7 @@ bool InkHUD::HybridReaderApplet::loadChapter(int index) {
     if (lines.empty()) lines.emplace_back("(No readable text in this chapter)");
     const int bodyHeight = height() - getHeaderHeight() - 54;
     const int fontHeight = 25;
-    linesPerPage = std::max(1, static_cast<size_t>(bodyHeight / fontHeight));
+    linesPerPage = static_cast<size_t>(std::max(1, bodyHeight / fontHeight));
     pages = std::max(1, static_cast<int>((lines.size() + linesPerPage - 1) / linesPerPage));
     chapter = index;
     page = 0;

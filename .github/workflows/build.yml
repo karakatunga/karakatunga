@@ -7,8 +7,9 @@ on:
       - "integration/**"
       - "scripts/**"
       - ".github/workflows/build.yml"
+      - "pio-constraints.txt"
   push:
-    branches: [ main ]
+    branches: [ main, "t5-hybrid/integration" ]
 permissions:
   contents: read
 jobs:

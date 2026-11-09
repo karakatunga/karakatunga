@@ -80,7 +80,8 @@ bool InkHUD::HybridReaderApplet::openSelectedBook() {
         reading = false;
         return false;
     }
-    currentTitle = parser.getTitle().length() ? parser.getTitle().c_str() : basenameOf(currentPath);
+    if (parser.getTitle().length()) currentTitle = parser.getTitle().c_str();
+    else currentTitle = basenameOf(currentPath);
     reading = true;
     chapter = 0;
     page = 0;
@@ -93,6 +94,7 @@ bool InkHUD::HybridReaderApplet::openSelectedBook() {
 }
 bool InkHUD::HybridReaderApplet::loadChapter(int index) {
     if (!reading || index < 0 || index >= parser.getChapterCount()) return false;
+    setFont(fontMedium);
     String content = parser.getChapterText(index);
     if (!content.length()) return false;
     lines.clear();
@@ -223,7 +225,7 @@ void InkHUD::HybridReaderApplet::onRender(bool full) {
                     (i == selected ? "> " : "  ") + label);
         }
         setFont(fontSmall);
-        printAt(12, height() - 26, "Select: short press   Open: long press on title");
+        printAt(12, height() - 26, "Open: short press or hold a title   Tap header: rescan");
         return;
     }
     std::string header = currentTitle;

@@ -1,12 +1,14 @@
 name: T5 Hybrid firmware build
 on:
   workflow_dispatch:
-  push:
-    branches: [ "t5-hybrid/integration" ]
+  pull_request:
+    branches: [ main ]
     paths:
       - "integration/**"
       - "scripts/**"
       - ".github/workflows/build.yml"
+  push:
+    branches: [ main ]
 permissions:
   contents: read
 jobs:
@@ -15,6 +17,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         name: Checkout integration
+        with:
+          ref: ${{ github.event.pull_request.head.ref || github.ref_name }}
       - uses: actions/checkout@v4
         name: Checkout Meshtastic firmware
         with:

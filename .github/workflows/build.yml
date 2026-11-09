@@ -1,0 +1,47 @@
+name: T5 Hybrid firmware build
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: [ main ]
+    paths:
+      - "integration/**"
+      - "scripts/**"
+      - ".github/workflows/build.yml"
+  push:
+    branches: [ main ]
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        name: Checkout integration
+        with:
+          ref: ${{ github.event.pull_request.head.ref || github.ref_name }}
+      - uses: actions/checkout@v4
+        name: Checkout Meshtastic firmware
+        with:
+          repository: meshtastic/firmware
+          ref: develop
+          path: firmware
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install PlatformIO
+        run: |
+          python -m pip install --upgrade pip
+          pip install platformio
+      - name: Inject reader applet
+        run: python scripts/inject_applet.py
+      - name: Compile T5 S3 Pro V2 InkHUD
+        working-directory: firmware
+        run: pio run -e t5s3_epaper_inkhud
+      - name: Upload firmware binary
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: t5-hybrid-epub-prototype
+          path: firmware/.pio/build/t5s3_epaper_inkhud/firmware.bin
+          if-no-files-found: error
+          retention-days: 14

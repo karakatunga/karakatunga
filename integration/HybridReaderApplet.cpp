@@ -35,8 +35,9 @@ void InkHUD::HybridReaderApplet::scanLibrary() {
             File entry = dir.openNextFile();
             while (entry) {
                 if (!entry.isDirectory() && isEpub(entry.name())) {
-                    const char *path = entry.path();
-                    books.emplace_back(path ? path : entry.name());
+                    std::string path = entry.name();
+                    if (path.empty() || path[0] != '/') path = "/books/" + path;
+                    books.emplace_back(path);
                 }
                 entry.close();
                 entry = dir.openNextFile();

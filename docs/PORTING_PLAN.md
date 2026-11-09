@@ -1,15 +1,22 @@
-# EPUB engine porting plan
+# EPUB engine integration and validation
 
-The standalone T5 reader is not safe to compile as a second Arduino application inside Meshtastic: its `main.cpp` owns setup/loop, display, touch, deep sleep and SD initialisation. The hybrid must instead reuse its parser/model selectively.
+## Implemented
+- The standalone reader's EPUB ZIP/OPF parser and miniz inflate implementation are included under `integration/epub` with the upstream MIT license.
+- The InkHUD applet lists EPUB files in `/books`, opens a book, extracts chapter text, wraps it to the InkHUD font width, and paginates it.
+- Page turns cross chapter boundaries.
+- The current book, chapter and page are persisted in a dedicated Preferences namespace.
+- ZIP file reads are protected by Meshtastic's shared `spiLock`; compressed data is read while holding the lock and inflated after releasing it.
 
-1. Isolate `EpubParser` and ZIP/XML dependencies from the standalone app.
-2. Replace direct `SD.begin()`, `SPI.begin()` and SD operations with a storage adapter using Meshtastic's mounted `FSCom` and `concurrency::LockGuard(spiLock)`.
-3. Make parsing incremental/stateful; do not monopolise the main loop during large archive reads.
-4. Replace standalone display functions with InkHUD drawing calls.
-5. Add library, opening, reading, table-of-contents and bookmark states.
-6. Save progress/bookmarks in a namespaced directory such as `/books/.hybrid/`; do not reuse Meshtastic preference keys.
-7. Test SD/LoRa bus contention and verify radio packets continue processing during navigation.
+## Still required before a final release
+1. Obtain a successful PlatformIO build from GitHub Actions and resolve all compiler/linker errors.
+2. Validate on the exact H752-01 V2 hardware, including display orientation, GT911 touch and physical button semantics.
+3. Measure LoRa packet handling while opening large EPUBs. The current parser/chapter load is synchronous at the UI callback level, so the radio must be stress-tested with large books; if latency is unacceptable, move parsing to a bounded background worker with short SPI critical sections.
+4. Add TOC navigation, persistent multiple bookmarks, font/spacing settings and robust handling for malformed/large EPUBs.
+5. Test SD removal, missing `/books`, non-ASCII filenames, stored/deflated ZIP entries, and power interruption during progress save.
+6. Pin Meshtastic upstream to the exact commit used for the validated build, publish the firmware binary with checksums and release notes.
 
-## Current prototype limitations
-
-The applet only lists EPUB filenames in `/books`. Navigation selects a row; the primary button and header touch rescan the card. EPUB opening and page rendering are not implemented yet.
+## Hardware constraints
+- Do not add a second `setup()` or `loop()`.
+- Do not call `SD.begin()` or `SPI.begin()` from the applet.
+- The T5 variant shares SPI between SD and LoRa. All SD access must use the existing mount and `spiLock`.
+- Keep display and touch ownership in Meshtastic's existing InkHUD stack.

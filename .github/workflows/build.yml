@@ -14,6 +14,8 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
+    env:
+      UV_CONSTRAINT: ${{ github.workspace }}/pio-constraints.txt
     steps:
       - uses: actions/checkout@v4
         name: Checkout integration

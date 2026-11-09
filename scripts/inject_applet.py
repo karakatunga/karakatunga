@@ -13,6 +13,10 @@ target.mkdir(parents=True, exist_ok=True)
 for name in ("HybridReaderApplet.h", "HybridReaderApplet.cpp"):
     (target / name).write_bytes((root / "integration" / name).read_bytes())
 
+# EPUB parser and miniz are compiled as part of the Meshtastic source tree.
+for name in ("epub.h", "epub.cpp", "miniz.h", "miniz.c"):
+    (target / name).write_bytes((root / "integration" / "epub" / name).read_bytes())
+
 text = variant.read_text()
 include = '#include "graphics/niche/InkHUD/Applets/User/HybridReader/HybridReaderApplet.h"'
 registration = '    inkhud->addApplet("EPUB Reader", new InkHUD::HybridReaderApplet, true, false);'

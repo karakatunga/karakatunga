@@ -1,7 +1,7 @@
 #ifdef MESHTASTIC_INCLUDE_INKHUD
 #include "HybridReaderApplet.h"
-#include "FSCommon.h"
 #include "SPILock.h"
+#include <SD.h>
 #include <algorithm>
 #include <cctype>
 
@@ -30,7 +30,7 @@ void InkHUD::HybridReaderApplet::scanLibrary() {
     // and lock; never call SPI.begin() or SD.begin() here.
     {
         concurrency::LockGuard guard(spiLock);
-        File dir = FSCom.open("/books", FILE_O_READ);
+        File dir = SD.open("/books", FILE_READ);
         if (dir && dir.isDirectory()) {
             File entry = dir.openNextFile();
             while (entry) {

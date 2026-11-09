@@ -20,7 +20,7 @@ if include not in text:
     anchor = '#include "graphics/niche/InkHUD/InkHUD.h"'
     if anchor not in text:
         raise SystemExit("Could not find InkHUD include anchor; upstream changed")
-    text = text.replace(anchor, anchor + "\\n" + include, 1)
+    text = text.replace(anchor, anchor + "\n" + include, 1)
 if registration not in text:
     anchor = '    // Enable reusable InkHUD touch status indicator'
     if anchor not in text:

@@ -1,4 +1,5 @@
 #include "epub.h"
+#include "SPILock.h"
 #include "miniz.h"
 #define z_stream     mz_stream
 #define Z_OK         MZ_OK
@@ -36,7 +37,7 @@ bool ZipReader::open(const char* path) {
     }
 
     Serial.printf("ZIP: opening %s (vfs: %s)\n", path, vfsPath.c_str());
-    _f = fopen(vfsPath.c_str(), "rb");
+    { concurrency::LockGuard guard(spiLock); _f = fopen(vfsPath.c_str(), "rb"); }
     if (!_f) {
         Serial.printf("ZIP: cannot open %s (errno %d)\n", vfsPath.c_str(), errno);
         return false;
@@ -45,11 +46,12 @@ bool ZipReader::open(const char* path) {
 }
 
 void ZipReader::close() {
-    if (_f) { fclose(_f); _f = nullptr; }
+    if (_f) { concurrency::LockGuard guard(spiLock); fclose(_f); _f = nullptr; }
     _entries.clear();
 }
 
 bool ZipReader::parseCentralDirectory() {
+    concurrency::LockGuard guard(spiLock);
     // Find End of Central Directory record (search backwards)
     fseek(_f, 0, SEEK_END);
     long fileSize = ftell(_f);
@@ -149,60 +151,57 @@ static bool zipSeekToData(FILE* f, const ZipEntry& entry) {
 }
 
 uint8_t* ZipReader::readFile(const char* name, size_t* outSize) {
+    if (!outSize || !_f || !name) return nullptr;
     *outSize = 0;
-
-    for (const auto& entry : _entries) {
-        if (entry.name != name) continue;
-
+    const ZipEntry *found = nullptr;
+    for (const auto& entry : _entries) if (entry.name == name) { found = &entry; break; }
+    if (!found) return nullptr;
+    const ZipEntry entry = *found;
+    uint8_t *compressed = nullptr;
+    {
+        // Hold the shared SD/LoRa SPI lock only while touching the card.
+        concurrency::LockGuard guard(spiLock);
         if (!zipSeekToData(_f, entry)) return nullptr;
-
         if (entry.compression_method == 0) {
-            // STORED — just read directly
-            uint8_t* data = (uint8_t*)ps_malloc(entry.uncompressed_size + 1);
+            uint8_t *data = (uint8_t*)ps_malloc(entry.uncompressed_size + 1);
             if (!data) return nullptr;
-            fread(data, 1, entry.uncompressed_size, _f);
-            data[entry.uncompressed_size] = 0;
-            *outSize = entry.uncompressed_size;
-            return data;
-
-        } else if (entry.compression_method == 8) {
-            // DEFLATE — inflate using zlib
-            uint8_t* compressed = (uint8_t*)malloc(entry.compressed_size);
-            if (!compressed) return nullptr;
-            fread(compressed, 1, entry.compressed_size, _f);
-
-            uint8_t* data = (uint8_t*)ps_malloc(entry.uncompressed_size + 1);
-            if (!data) { free(compressed); return nullptr; }
-
-            z_stream strm;
-            memset(&strm, 0, sizeof(strm));
-            strm.next_in   = compressed;
-            strm.avail_in  = entry.compressed_size;
-            strm.next_out  = data;
-            strm.avail_out = entry.uncompressed_size;
-
-            if (inflateInit2(&strm, -MAX_WBITS) != Z_OK) {
-                free(compressed); free(data); return nullptr;
+            if (fread(data, 1, entry.uncompressed_size, _f) != entry.uncompressed_size) {
+                free(data); return nullptr;
             }
-            int ret = inflate(&strm, Z_FINISH);
-            inflateEnd(&strm);
-            free(compressed);
-
-            if (ret != Z_STREAM_END && ret != Z_OK) {
-                free(data);
-                return nullptr;
-            }
-
             data[entry.uncompressed_size] = 0;
             *outSize = entry.uncompressed_size;
             return data;
         }
-        break;
+        if (entry.compression_method != 8) return nullptr;
+        compressed = (uint8_t*)malloc(entry.compressed_size);
+        if (!compressed) return nullptr;
+        if (fread(compressed, 1, entry.compressed_size, _f) != entry.compressed_size) {
+            free(compressed); return nullptr;
+        }
     }
-    return nullptr;
+    // Inflation is CPU work and deliberately happens after releasing SPI.
+    uint8_t *data = (uint8_t*)ps_malloc(entry.uncompressed_size + 1);
+    if (!data) { free(compressed); return nullptr; }
+    z_stream strm;
+    memset(&strm, 0, sizeof(strm));
+    strm.next_in = compressed;
+    strm.avail_in = entry.compressed_size;
+    strm.next_out = data;
+    strm.avail_out = entry.uncompressed_size;
+    if (inflateInit2(&strm, -MAX_WBITS) != Z_OK) {
+        free(compressed); free(data); return nullptr;
+    }
+    int ret = inflate(&strm, Z_FINISH);
+    inflateEnd(&strm);
+    free(compressed);
+    if (ret != Z_STREAM_END && ret != Z_OK) { free(data); return nullptr; }
+    data[entry.uncompressed_size] = 0;
+    *outSize = entry.uncompressed_size;
+    return data;
 }
 
 bool ZipReader::extractFileTo(const char* name, const char* outPath, size_t* outSize) {
+    concurrency::LockGuard guard(spiLock);
     if (outSize) *outSize = 0;
     if (!_f || !name || !outPath) return false;
 

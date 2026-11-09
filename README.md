@@ -1,45 +1,54 @@
 # T5 Hybrid — Meshtastic + EPUB Reader
 
-Experimental integration workspace for the LilyGO T5 E-Paper S3 Pro V2 (H752-01).
+Experimental integration for the LilyGO T5 E-Paper S3 Pro V2 (H752-01).
 
-**Goal:** keep Meshtastic as the firmware and radio core, and add an EPUB reader as an InkHUD applet. LoRa, Bluetooth, GPS, routing and message handling must remain active while reading.
+## Implemented in this branch
 
-## Current implementation status
+- Meshtastic remains the firmware and radio core.
+- InkHUD applet browses EPUB files in `/books` on the microSD card.
+- EPUB ZIP/OPF parsing and chapter text extraction are ported from the MIT-licensed T5 reader project.
+- Basic word wrapping, page navigation and chapter transitions.
+- Last opened book, chapter and page are saved in a separate Preferences namespace and restored on applet activation.
+- SD file operations use Meshtastic's shared `spiLock`; EPUB inflate work happens after releasing the SPI lock.
+- CI workflow overlays the applet into upstream Meshtastic and compiles `t5s3_epaper_inkhud`.
 
-This repository contains an InkHUD library applet prototype and an automated firmware build workflow. The applet scans the Meshtastic-mounted SD card for EPUB files and presents a selectable library. It is **not yet a complete EPUB reader**: EPUB parsing, pagination, bookmarks and reading-position persistence remain to be ported.
+## Controls
 
-No prebuilt firmware is published. Do not flash an artifact until a release is explicitly marked hardware-validated.
+- Library: short button press opens the highlighted book.
+- Library: tap header to rescan; long-press a title to open it.
+- Reader: short button press / right-side tap / down navigation advances a page.
+- Reader: left-side tap / up navigation goes back a page.
+- Reader: long press returns to the library.
+- Reading position is saved automatically.
+
+Copy EPUB files to `/books` on the microSD card.
 
 ## Build
 
-GitHub Actions checks out upstream Meshtastic `develop`, overlays the applet into the T5 S3 Pro InkHUD variant and runs:
+GitHub Actions workflow: `.github/workflows/build.yml`.
+
+The workflow checks out upstream Meshtastic `develop`, overlays the applet and EPUB parser, and runs:
 
 ```sh
 pio run -e t5s3_epaper_inkhud
 ```
 
-For a reproducible release, upstream must be pinned to an exact commit.
+The firmware binary is uploaded as a short-lived workflow artifact after a successful compile.
 
-## Hardware / upstream
+## Important limitations before calling this final
 
-- Board target: Meshtastic `t5s3_epaper_inkhud` (H752-01 V2)
-- Display/UI: ED047TC1 + InkHUD
-- Touch: existing T5 touch integration
-- Storage: Meshtastic `FSCom` / `SPILock`; no second `SD.begin()`
-- EPUB engine reference: https://github.com/yetisoldier/t5-ereader-firmware
+This is a source integration milestone, not yet a hardware-validated release. The EPUB parser and initial chapter extraction are synchronous from the InkHUD input callback; SD bus ownership is protected, but radio servicing under worst-case large books still needs measurement on the device. Rich typography, inline images, table of contents, multiple bookmarks, settings, and EPUB edge-case validation are not yet implemented. Do not flash an artifact until the workflow succeeds and the image is validated on the exact T5 hardware revision.
 
-## Roadmap
+## Hardware constraints
 
-- [x] Create integration repository and branch
-- [x] Add InkHUD library applet prototype
-- [x] Add automated compile workflow
-- [ ] Compile against current upstream
-- [ ] Port EPUB parser without taking over Meshtastic setup/loop
-- [ ] Add chapter rendering, page turns, TOC and bookmarks
-- [ ] Persist reading progress and settings
-- [ ] Validate concurrent LoRa traffic during SD reads/page turns on hardware
-- [ ] Publish firmware only after hardware validation
+- Target: Meshtastic `t5s3_epaper_inkhud` (H752-01 V2)
+- Display: ED047TC1, driven by the existing InkHUD display stack
+- Touch: existing GT911 integration
+- Storage: existing Meshtastic SD mount; no second `SD.begin()` or SPI bus
+- Radio: SX1262 remains owned by Meshtastic
 
-## Critical constraints
+## Upstream projects
 
-The T5 variant explicitly states that SD and LoRa share pins and must use the default SPI object. Reader code accesses the already-mounted `FSCom` filesystem under `spiLock`; it must never initialise another SPI bus or call `SD.begin()`. Long EPUB operations must be incremental so Meshtastic continues servicing the radio.
+- Meshtastic firmware: https://github.com/meshtastic/firmware
+- EPUB reader reference: https://github.com/yetisoldier/t5-ereader-firmware
+- Ported parser license: [integration/epub/LICENSE](integration/epub/LICENSE)
